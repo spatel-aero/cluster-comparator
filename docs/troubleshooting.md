@@ -122,9 +122,7 @@ java -jar cluster-comparator.jar \
 | < 1M records | Start with `--threads 0` (auto, max 32) | Minutes | < 1GB |
 | 1M-10M records | Auto or moderate count | 10-30 minutes | 1-2GB |
 | 10M-100M records | Consider cluster capacity | 30min-2hours | 2-4GB |
-| > 100M records | Use partition chunking* | Hours | 4-8GB |
-
-*Use `--startPartition`/`--endPartition` to process in batches
+| > 100M records | Consider cluster capacity | Hours | 4-8GB |
 
 **Thread Selection Strategy:**
 1. **Start with the default**: `--threads 0` (min(CPU cores, 32))

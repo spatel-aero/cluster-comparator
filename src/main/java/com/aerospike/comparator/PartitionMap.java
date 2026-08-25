@@ -17,20 +17,22 @@ public class PartitionMap {
         Map<String, String> nodeToInfo = client.invokeInfoCommandOnAllNodes("partition-info");
         for (String nodeName : nodeToInfo.keySet()) {
             String result = nodeToInfo.get(nodeName);
-            String[] lines = result.split(";" );
-            boolean first = true;
-            for (String line: lines) {
-                if (first) {
-                    // This is a heading line, skip it
-                    first = false;
+            String[] entries = result.split(";");
+            if (entries.length == 0) {
+                continue;
+            }
+            String headerLine = entries[0].trim();
+            for (int i = 1; i < entries.length; i++) {
+                String line = entries[i].trim();
+                if (line.isEmpty()) {
                     continue;
                 }
-                
-                PartitionData data = new PartitionData(line);
+
+                PartitionData data = PartitionData.parse(headerLine, line);
                 String namespace = data.getNamespace();
                 if (namespaceToPartitions.get(namespace) == null) {
                     List<PartitionData> partData = new ArrayList<>(NUMBER_OF_PARTITIONS);
-                    for (int i = 0; i < NUMBER_OF_PARTITIONS; i++) {
+                    for (int partitionId = 0; partitionId < NUMBER_OF_PARTITIONS; partitionId++) {
                         partData.add(null);
                     }
                     namespaceToPartitions.put(namespace, partData);

@@ -1,5 +1,7 @@
 package com.aerospike.comparator;
 
+import java.util.Map;
+
 public class PartitionData {
     private final String namespace;
     private final int partitionId;
@@ -13,21 +15,48 @@ public class PartitionData {
     private final long immigrates;
     private final long records;
     private final long tombstones;
-    
-    public PartitionData(String data) {
-        String[] cols = data.split(":");
-        namespace = cols[0];
-        partitionId = Integer.parseInt(cols[1]);
-        state = cols[2];
-        nReplicas = Integer.parseInt(cols[3]);
-        replica = Integer.parseInt(cols[4]);
-        nDupl = Integer.parseInt(cols[5]);
-        workingMaster = cols[6];
-        emigrates = Long.parseLong(cols[7]);
-        leadEmigrates = Long.parseLong(cols[8]);
-        immigrates = Long.parseLong(cols[9]);
-        records = Long.parseLong(cols[10]);
-        tombstones = Long.parseLong(cols[11]);
+
+    PartitionData(Map<String, String> fields) {
+        namespace = required(fields, "namespace");
+        partitionId = parseInt(fields, "partition");
+        state = fields.getOrDefault("state", "");
+        nReplicas = parseInt(fields, "n_replicas");
+        replica = parseInt(fields, "replica");
+        nDupl = parseInt(fields, "n_dupl");
+        workingMaster = fields.getOrDefault("working_master", "");
+        emigrates = parseLong(fields, "emigrates");
+        leadEmigrates = parseLong(fields, "lead_emigrates");
+        immigrates = parseLong(fields, "immigrates");
+        records = parseLong(fields, "records");
+        tombstones = parseLong(fields, "tombstones");
+    }
+
+    static PartitionData parse(String headerLine, String dataLine) {
+        return PartitionInfoParser.parseRow(headerLine, dataLine);
+    }
+
+    private static String required(Map<String, String> fields, String name) {
+        String value = fields.get(name);
+        if (value == null || value.isEmpty()) {
+            throw new IllegalArgumentException("partition-info row is missing required field: " + name);
+        }
+        return value;
+    }
+
+    private static int parseInt(Map<String, String> fields, String name) {
+        String value = fields.get(name);
+        if (value == null || value.isEmpty()) {
+            return 0;
+        }
+        return Integer.parseInt(value);
+    }
+
+    private static long parseLong(Map<String, String> fields, String name) {
+        String value = fields.get(name);
+        if (value == null || value.isEmpty()) {
+            return 0;
+        }
+        return Long.parseLong(value);
     }
 
     public String getNamespace() {
@@ -77,5 +106,4 @@ public class PartitionData {
     public long getTombstones() {
         return tombstones;
     }
-    
 }
