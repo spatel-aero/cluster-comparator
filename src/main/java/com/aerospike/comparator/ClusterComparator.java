@@ -76,6 +76,7 @@ public class ClusterComparator {
     volatile boolean forceTerminate = false;
     private final List<MissingRecordHandler> missingRecordHandlers = new ArrayList<>();
     private final List<RecordDifferenceHandler> recordDifferenceHandlers = new ArrayList<>();
+    private final List<QuickCompareHandler> quickCompareHandlers = new ArrayList<>();
     private final ClusterComparatorOptions options;
     private int threadsToUse;
     private List<Integer> partitionList = new ArrayList<>();
@@ -207,6 +208,7 @@ public class ClusterComparator {
             ConsoleDifferenceHandler consoleHandler = new ConsoleDifferenceHandler(this.options);
             this.missingRecordHandlers.add(consoleHandler);
             this.recordDifferenceHandlers.add(consoleHandler);
+            this.quickCompareHandlers.add(consoleHandler);
         }
         if (options.getOutputFileName() != null && 
                 options.getAction() != Action.TOUCH && 
@@ -215,6 +217,7 @@ public class ClusterComparator {
             CsvDifferenceHandler csvHandler = new CsvDifferenceHandler(options.getOutputFileName(), options);
             this.missingRecordHandlers.add(csvHandler);
             this.recordDifferenceHandlers.add(csvHandler);
+            this.quickCompareHandlers.add(csvHandler);
         }
     }
     
@@ -322,7 +325,7 @@ public class ClusterComparator {
             if (clientPolicy.user != null && clientPolicy.password == null) {
                 java.io.Console console = System.console();
                 if (console != null) {
-                    char[] pass = console.readPassword("Enter password for cluster " + clusterIndex + ": ");
+                    char[] pass = console.readPassword("Enter password for cluster " + options.clusterIdToName(clusterIndex) + ": ");
                     if (pass != null) {
                         clientPolicy.password = new String(pass);
                     }
@@ -330,7 +333,7 @@ public class ClusterComparator {
             }
             IAerospikeClient client = new AerospikeClient(clientPolicy, hosts);
             if (!options.isSilent()) {
-                System.out.printf("Cluster %d: name: %s, hosts: %s user: %s, password: %s\n", clusterIndex, 
+                System.out.printf("Cluster %s: name: %s, hosts: %s user: %s, password: %s\n", options.clusterIdToName(clusterIndex),
                         clientPolicy.clusterName, Arrays.toString(hosts), clientPolicy.user, clientPolicy.password == null ? "null" : "********");
                 System.out.printf("         authMode: %s, tlsPolicy: %s\n", clientPolicy.authMode, tlsPolicyAsString(clientPolicy.tlsPolicy));
                 if (options.isVerbose()) {
@@ -341,7 +344,17 @@ public class ClusterComparator {
         }
     }
 
-    private List<Integer> quickCompare(AerospikeClientAccess[] clients, String namespace) {
+    private static class QuickCompareResult {
+        private final PartitionMap[] partitionMaps;
+        private final List<Integer> differingPartitions;
+
+        private QuickCompareResult(PartitionMap[] partitionMaps, List<Integer> differingPartitions) {
+            this.partitionMaps = partitionMaps;
+            this.differingPartitions = differingPartitions;
+        }
+    }
+
+    private QuickCompareResult quickCompare(AerospikeClientAccess[] clients, String namespace) {
         PartitionMap[] partitionMaps = new PartitionMap[clients.length];
         Set<Integer> partitionsDifferent = new HashSet<>();
         forEachCluster((i, c) -> {
@@ -359,8 +372,8 @@ public class ClusterComparator {
             System.out.printf("Quick record counts:\n");
             forEachCluster((i, c) -> {
                 String thisNamespace = options.getNamespaceName(namespace, i);
-                System.out.printf("\tcluster %d: (%d records, %d tombstones)\n",
-                    i, partitionMaps[i].getRecordCount(thisNamespace), partitionMaps[i].getTombstoneCount(thisNamespace));
+                System.out.printf("\tcluster %s: (%d records, %d tombstones)\n",
+                    options.clusterIdToName(i), partitionMaps[i].getRecordCount(thisNamespace), partitionMaps[i].getTombstoneCount(thisNamespace));
             });
         }
         for (int i = 0; i < clients.length; i++) {
@@ -370,7 +383,29 @@ public class ClusterComparator {
         }
         List<Integer> differences = new ArrayList<>(partitionsDifferent);
         differences.sort(null);
-        return differences;
+        return new QuickCompareResult(partitionMaps, differences);
+    }
+
+    private void reportQuickCompareDifferences(String namespace, QuickCompareResult result) throws IOException {
+        for (int partitionId : result.differingPartitions) {
+            long[] records = new long[numberOfClusters];
+            long[] tombstones = new long[numberOfClusters];
+            long[] netCounts = new long[numberOfClusters];
+            for (int i = 0; i < numberOfClusters; i++) {
+                String thisNamespace = options.getNamespaceName(namespace, i);
+                records[i] = result.partitionMaps[i].getRecords(thisNamespace, partitionId);
+                tombstones[i] = result.partitionMaps[i].getTombstones(thisNamespace, partitionId);
+                netCounts[i] = result.partitionMaps[i].getNetObjectCount(thisNamespace, partitionId);
+            }
+            for (QuickCompareHandler thisHandler : quickCompareHandlers) {
+                try {
+                    thisHandler.handle(namespace, partitionId, records, tombstones, netCounts);
+                }
+                catch (Exception e) {
+                    System.err.printf("Error in %s: %s\n", thisHandler.getClass().getSimpleName(), e.getMessage());
+                }
+            }
+        }
     }
     
     int compare(byte[] digest1, byte[] digest2) {
@@ -1155,13 +1190,21 @@ public class ClusterComparator {
         Runnable runner = null;
         if (options.isQuickCompare()) {
             try {
-                List<Integer> partitionsToCompare = quickCompare(clients, namespace);
+                QuickCompareResult quickCompareResult = quickCompare(clients, namespace);
+                try {
+                    reportQuickCompareDifferences(namespace, quickCompareResult);
+                }
+                catch (IOException ioe) {
+                    System.err.printf("Error writing quick compare output: %s\n", ioe.getMessage());
+                }
                 if (!options.isSilent()) {
-                    if (partitionsToCompare.size() <= 20) {
-                        System.out.printf("Quick compare found %d partitions different: %s\n", partitionsToCompare.size(), partitionsToCompare);
+                    if (quickCompareResult.differingPartitions.size() <= 20) {
+                        System.out.printf("Quick compare found %d partitions different: %s\n",
+                                quickCompareResult.differingPartitions.size(), quickCompareResult.differingPartitions);
                     }
                     else {
-                        System.out.printf("Quick compare found %d partitions different\n", partitionsToCompare.size());
+                        System.out.printf("Quick compare found %d partitions different\n",
+                                quickCompareResult.differingPartitions.size());
                     }
                 }
                 return;
@@ -1238,14 +1281,14 @@ public class ClusterComparator {
     private void showSummary() {
         if (!options.isSilent()) {
             if (options.isRecordLevelCompare()) {
-                forEachCluster((i, c) -> System.out.printf("Missing records on side %d : %,d\n", i+1, this.recordsMissingOnCluster.get(i)));
+                forEachCluster((i, c) -> System.out.printf("Missing records on cluster %s : %,d\n", options.clusterIdToName(i), this.recordsMissingOnCluster.get(i)));
                 System.out.printf("Records different         : %,d\n"
                                 + "Records compared          : %,d\n", 
                         this.recordsDifferentCount.get(), this.totalRecordsCompared.get());
             }
             else {
                 String title = options.getCompareMode() == CompareMode.FIND_OVERLAP ? "Overlapping" : "Missing";
-                forEachCluster((i, c) -> System.out.printf("%s records on side %d : %,d\n", title, i+1, this.recordsMissingOnCluster.get(i)));
+                forEachCluster((i, c) -> System.out.printf("%s records on cluster %s : %,d\n", title, options.clusterIdToName(i), this.recordsMissingOnCluster.get(i)));
             }
             if (this.forceTerminate) {
                 if (this.totalMissingRecords.get() >= this.options.getMissingRecordsLimit()) {
@@ -1374,7 +1417,7 @@ public class ClusterComparator {
             case TOUCH:
                 client.touch(writePolicyToUse, key);
                 if (!options.isSilent()) {
-                    System.out.printf("Touching record %s on cluster %d\n", key, clusterOrdinal+1);
+                    System.out.printf("Touching record %s on cluster %s\n", key, options.clusterIdToName(clusterOrdinal));
                 }
                 break;
                 
@@ -1399,7 +1442,7 @@ public class ClusterComparator {
                 writePolicyToUse.durableDelete = action == CustomActions.DURABLE_DELETE;
                 client.delete(writePolicyToUse, key);
                 if (!options.isSilent()) {
-                    System.out.printf("Deleting record %s on cluster %d\n", key, clusterOrdinal+1);
+                    System.out.printf("Deleting record %s on cluster %s\n", key, options.clusterIdToName(clusterOrdinal));
                 }
                 break;
             case NONE:
@@ -1654,13 +1697,16 @@ public class ClusterComparator {
         }
         long[] processedPerCluster = new long[numberOfClusters];
         long[] missingPerCluster = new long[numberOfClusters];
+        String[] clusterLabels = new String[numberOfClusters];
         for (int i = 0; i < numberOfClusters; i++) {
             processedPerCluster[i] = recordsProcessedOnCluster.get(i);
             missingPerCluster[i] = recordsMissingOnCluster.get(i);
+            clusterLabels[i] = options.clusterIdToName(i);
         }
         return new ProgressSnapshot(
                 processedPerCluster,
                 missingPerCluster,
+                clusterLabels,
                 recordsDifferentCount.get(),
                 totalMissingRecords.get(),
                 totalRecordsCompared.get(),

@@ -6,11 +6,13 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
-import type { ProgressData } from '../api';
+import type { ProgressData, ClusterConfig } from '../api';
+import { getClusterDisplayName } from '../clusterLabels';
 
 interface ResultsPanelProps {
   history: ProgressData[];
   onDelete: (index: number) => void;
+  clusters?: ClusterConfig[];
 }
 
 function formatTimestamp(ms: number): string {
@@ -49,7 +51,7 @@ function RunSummary({ data }: { data: ProgressData }) {
   );
 }
 
-function RunDetail({ data }: { data: ProgressData }) {
+function RunDetail({ data, clusters = [] }: { data: ProgressData; clusters?: ClusterConfig[] }) {
   const hasDiffs = data.totalMissingRecords > 0 || data.recordsDifferent > 0;
   return (
     <Box>
@@ -112,7 +114,7 @@ function RunDetail({ data }: { data: ProgressData }) {
           <TableBody>
             {data.recordsProcessedPerCluster.map((processed, idx) => (
               <TableRow key={idx}>
-                <TableCell>Cluster {idx + 1}</TableCell>
+                <TableCell>{getClusterDisplayName(idx, clusters[idx], data.clusterLabels?.[idx])}</TableCell>
                 <TableCell align="right">{processed.toLocaleString()}</TableCell>
                 <TableCell
                   align="right"
@@ -132,7 +134,7 @@ function RunDetail({ data }: { data: ProgressData }) {
   );
 }
 
-export default function ResultsPanel({ history, onDelete }: ResultsPanelProps) {
+export default function ResultsPanel({ history, onDelete, clusters = [] }: ResultsPanelProps) {
   if (history.length === 0) {
     return (
       <Paper sx={{ p: 4, textAlign: 'center', boxShadow: 2 }}>
@@ -171,7 +173,7 @@ export default function ResultsPanel({ history, onDelete }: ResultsPanelProps) {
               </Stack>
             </AccordionSummary>
             <AccordionDetails>
-              <RunDetail data={run} />
+              <RunDetail data={run} clusters={clusters} />
             </AccordionDetails>
           </Accordion>
         );

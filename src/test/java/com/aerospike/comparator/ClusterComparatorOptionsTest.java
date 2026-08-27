@@ -31,4 +31,32 @@ public class ClusterComparatorOptionsTest {
         assertTrue(ClusterComparatorOptions.isValidThreadsValue(32));
         assertFalse(ClusterComparatorOptions.isValidThreadsValue(-2));
     }
+
+    @Test
+    void clusterIdToName_usesOneBasedOrdinalsWhenClusterNameNotSet() throws Exception {
+        ClusterComparatorOptions options = new ClusterComparatorOptions(new String[] {
+                "--hosts1", "h1:3000",
+                "--hosts2", "h2:3000",
+                "--namespaces", "test",
+                "--action", "scan"
+        });
+
+        assertEquals("1", options.clusterIdToName(0));
+        assertEquals("2", options.clusterIdToName(1));
+    }
+
+    @Test
+    void clusterIdToName_usesConfiguredClusterNamesWhenSet() throws Exception {
+        ClusterComparatorOptions options = new ClusterComparatorOptions(new String[] {
+                "--hosts1", "h1:3000",
+                "--hosts2", "h2:3000",
+                "--clusterName1", "source",
+                "--clusterName2", "target",
+                "--namespaces", "test",
+                "--action", "scan"
+        });
+
+        assertEquals("\"source\"", options.clusterIdToName(0));
+        assertEquals("\"target\"", options.clusterIdToName(1));
+    }
 }

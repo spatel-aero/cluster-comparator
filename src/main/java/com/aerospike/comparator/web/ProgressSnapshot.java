@@ -3,6 +3,7 @@ package com.aerospike.comparator.web;
 public class ProgressSnapshot {
     private final long[] recordsProcessedPerCluster;
     private final long[] recordsMissingPerCluster;
+    private final String[] clusterLabels;
     private final long recordsDifferent;
     private final long totalMissingRecords;
     private final long totalRecordsCompared;
@@ -14,10 +15,11 @@ public class ProgressSnapshot {
     private long completedAt;
 
     public ProgressSnapshot(long[] recordsProcessedPerCluster, long[] recordsMissingPerCluster,
-            long recordsDifferent, long totalMissingRecords, long totalRecordsCompared,
+            String[] clusterLabels, long recordsDifferent, long totalMissingRecords, long totalRecordsCompared,
             int partitionsComplete, int totalPartitions, boolean forceTerminated, String outputFile) {
         this.recordsProcessedPerCluster = recordsProcessedPerCluster;
         this.recordsMissingPerCluster = recordsMissingPerCluster;
+        this.clusterLabels = clusterLabels;
         this.recordsDifferent = recordsDifferent;
         this.totalMissingRecords = totalMissingRecords;
         this.totalRecordsCompared = totalRecordsCompared;
@@ -33,6 +35,10 @@ public class ProgressSnapshot {
 
     public long[] getRecordsMissingPerCluster() {
         return recordsMissingPerCluster;
+    }
+
+    public String[] getClusterLabels() {
+        return clusterLabels;
     }
 
     public long getRecordsDifferent() {

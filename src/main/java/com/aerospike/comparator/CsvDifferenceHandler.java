@@ -14,7 +14,7 @@ import com.aerospike.comparator.ClusterComparatorOptions.CompareMode;
 import com.aerospike.comparator.DifferenceCollection.RecordDifferences;
 import com.aerospike.comparator.dbaccess.RecordMetadata;
 
-public class CsvDifferenceHandler implements MissingRecordHandler, RecordDifferenceHandler {
+public class CsvDifferenceHandler implements MissingRecordHandler, RecordDifferenceHandler, QuickCompareHandler {
     public final String FILE_HEADER;
     private final File file;
     private PrintWriter writer;
@@ -139,6 +139,72 @@ public class CsvDifferenceHandler implements MissingRecordHandler, RecordDiffere
         writer.print(sb.append('\n').toString());
         writer.flush();
     }
+    @Override
+    public synchronized void handle(String namespace, int partitionId, long[] records, long[] tombstones, long[] netCounts) throws IOException {
+        if (writer == null) {
+            return;
+        }
+        String json = buildQuickCompareJson(records, tombstones, netCounts);
+        String humanReadable = buildQuickCompareHumanReadable(netCounts);
+        writeQuickCompareDifference(namespace, partitionId, json, humanReadable);
+    }
+
+    static String buildQuickCompareJson(long[] records, long[] tombstones, long[] netCounts, ClusterNameResolver resolver) {
+        StringBuilder jsonSb = new StringBuilder("{\"PARTITION_COUNT\":{");
+        for (int i = 0; i < records.length; i++) {
+            if (i > 0) {
+                jsonSb.append(',');
+            }
+            jsonSb.append('"').append(resolver.clusterIdToName(i)).append("\":{")
+                    .append("\"records\":").append(records[i])
+                    .append(",\"tombstones\":").append(tombstones[i])
+                    .append(",\"net\":").append(netCounts[i])
+                    .append('}');
+        }
+        jsonSb.append("}}");
+        return jsonSb.toString();
+    }
+
+    static String buildQuickCompareHumanReadable(long[] netCounts, ClusterNameResolver resolver) {
+        StringBuilder humanSb = new StringBuilder("Partition net object count mismatch: ");
+        for (int i = 0; i < netCounts.length; i++) {
+            if (i > 0) {
+                humanSb.append(", ");
+            }
+            humanSb.append(resolver.clusterIdToName(i)).append(" net=").append(netCounts[i]);
+        }
+        return humanSb.toString();
+    }
+
+    private String buildQuickCompareJson(long[] records, long[] tombstones, long[] netCounts) {
+        return buildQuickCompareJson(records, tombstones, netCounts, options);
+    }
+
+    private String buildQuickCompareHumanReadable(long[] netCounts) {
+        return buildQuickCompareHumanReadable(netCounts, options);
+    }
+
+    private void writeQuickCompareDifference(String namespace, int partitionId, String json, String humanReadable) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(namespace).append(',')
+                .append(',')
+                .append(partitionId).append(',')
+                .append(',');
+        if (numberOfClusters != 2) {
+            sb.append(numberOfClusters).append(',');
+        }
+        for (int i = 0; i < numberOfClusters; i++) {
+            sb.append(',');
+            if (options.isShowMetadata()) {
+                sb.append(",,,,");
+            }
+        }
+        sb.append(csvify(humanReadable)).append(',');
+        sb.append(csvify(json)).append(',');
+        writer.print(sb.append('\n').toString());
+        writer.flush();
+    }
+
     @Override
     public synchronized void handle(int partitionId, Key key, DifferenceCollection differences, List<Integer> missingFromClusters, RecordMetadata[] metadatas) throws IOException {
         

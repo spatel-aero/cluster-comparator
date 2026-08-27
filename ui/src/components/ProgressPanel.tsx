@@ -4,11 +4,13 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Grid, Stack,
 } from '@mui/material';
-import type { ProgressData } from '../api';
+import type { ProgressData, ClusterConfig } from '../api';
+import { getClusterDisplayName } from '../clusterLabels';
 
 interface ProgressPanelProps {
   progress: ProgressData | null;
   state: string;
+  clusters?: ClusterConfig[];
 }
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
@@ -20,7 +22,7 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-export default function ProgressPanel({ progress, state }: ProgressPanelProps) {
+export default function ProgressPanel({ progress, state, clusters = [] }: ProgressPanelProps) {
   const startTimeRef = useRef<number | null>(null);
   const prevTotalRef = useRef<number>(0);
   const [throughput, setThroughput] = useState(0);
@@ -95,7 +97,7 @@ export default function ProgressPanel({ progress, state }: ProgressPanelProps) {
           <TableBody>
             {progress.recordsProcessedPerCluster.map((processed, idx) => (
               <TableRow key={idx}>
-                <TableCell>Cluster {idx + 1}</TableCell>
+                <TableCell>{getClusterDisplayName(idx, clusters[idx], progress.clusterLabels?.[idx])}</TableCell>
                 <TableCell align="right">{processed.toLocaleString()}</TableCell>
                 <TableCell align="right" sx={{ color: (progress.recordsMissingPerCluster[idx] || 0) > 0 ? 'error.main' : undefined, fontWeight: (progress.recordsMissingPerCluster[idx] || 0) > 0 ? 700 : undefined }}>
                   {(progress.recordsMissingPerCluster[idx] || 0).toLocaleString()}

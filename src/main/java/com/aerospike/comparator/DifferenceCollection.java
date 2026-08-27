@@ -128,7 +128,7 @@ public class DifferenceCollection {
                     sb.append(',');
                 }
                 first = false;
-                sb.append(resolver == null ? i : resolver.clusterIdToName(i));
+                sb.append(resolver == null ? Integer.toString(i + 1) : resolver.clusterIdToName(i));
             }
             sb.append(']');
         }

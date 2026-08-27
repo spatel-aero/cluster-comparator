@@ -14,6 +14,7 @@ import CableIcon from '@mui/icons-material/Cable';
 import StorageIcon from '@mui/icons-material/Storage';
 import SettingsIcon from '@mui/icons-material/Settings';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import { getClusterTitle } from '../clusterLabels';
 import { testConnection, populateData, cancelPopulateData, getPopulateProgress, type ClusterConfig, type TestConnectionResult } from '../api';
 import TlsOptionsFields from './TlsOptionsFields';
 
@@ -120,7 +121,7 @@ export default function ClusterCard({ index, cluster, onChange, onRemove, canRem
   };
 
   const isRemote = (cluster.hostName || '').startsWith('remote:');
-  const displayName = cluster.clusterName || `Cluster ${index + 1}`;
+  const displayName = getClusterTitle(index, cluster);
   const hostSummary = cluster.hostName || '(no host configured)';
   const dotColor = connStatus === 'success' ? 'success' : connStatus === 'error' ? 'error' : 'disabled';
 
@@ -158,7 +159,7 @@ export default function ClusterCard({ index, cluster, onChange, onRemove, canRem
               </Tooltip>
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <Tooltip title="Optional cluster name for identification and cluster-name validation." arrow placement="top">
+              <Tooltip title="Optional label used in comparison output and progress tables (matches CLI --clusterName1, --clusterName2). Auto-populated from Test Connection when empty." arrow placement="top">
                 <TextField
                   fullWidth label="Cluster Name"
                   value={cluster.clusterName || ''}

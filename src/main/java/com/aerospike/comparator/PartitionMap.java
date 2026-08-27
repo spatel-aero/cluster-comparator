@@ -97,12 +97,25 @@ public class PartitionMap {
         }
     }
     
+    public long getRecords(String namespace, int partitionId) {
+        if (!this.isComplete(namespace)) {
+            throw new QuickCompareException("Cannot get record count of an incomplete partition map");
+        }
+        return this.namespaceToPartitions.get(namespace).get(partitionId).getRecords();
+    }
+
+    public long getTombstones(String namespace, int partitionId) {
+        if (!this.isComplete(namespace)) {
+            throw new QuickCompareException("Cannot get tombstone count of an incomplete partition map");
+        }
+        return this.namespaceToPartitions.get(namespace).get(partitionId).getTombstones();
+    }
+
     public long getNetObjectCount(String namespace, int partitionId) {
         if (!this.isComplete(namespace)) {
             throw new QuickCompareException("Cannot get net object count of an incomplete partition map");
         }
-        PartitionData data = this.namespaceToPartitions.get(namespace).get(partitionId);
-        return data.getRecords() - data.getTombstones();
+        return getRecords(namespace, partitionId) - getTombstones(namespace, partitionId);
     }
     
     public List<Integer> compare(PartitionMap partMap, String namespace) {

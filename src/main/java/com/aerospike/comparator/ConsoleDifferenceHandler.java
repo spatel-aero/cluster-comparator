@@ -9,7 +9,7 @@ import com.aerospike.client.command.Buffer;
 import com.aerospike.comparator.ClusterComparatorOptions.CompareMode;
 import com.aerospike.comparator.dbaccess.RecordMetadata;
 
-public class ConsoleDifferenceHandler implements MissingRecordHandler, RecordDifferenceHandler {
+public class ConsoleDifferenceHandler implements MissingRecordHandler, RecordDifferenceHandler, QuickCompareHandler {
     private final ClusterNameResolver resolver;
     public ConsoleDifferenceHandler(ClusterNameResolver resolver) {
         this.resolver = resolver;
@@ -36,14 +36,36 @@ public class ConsoleDifferenceHandler implements MissingRecordHandler, RecordDif
             }
             recordMetadataDesc = sb.toString();
         }
+        List<String> clusterLabels = missingFromClusters.stream()
+                .map(resolver::clusterIdToName)
+                .collect(Collectors.toList());
+        printMissingOrOverlapRecord(compareMode, key, clusterLabels, recordMetadataDesc);
+    }
+
+    static String formatClusterList(List<Integer> clusterIds, ClusterNameResolver resolver) {
+        return clusterIds.stream()
+                .map(resolver::clusterIdToName)
+                .collect(Collectors.toList())
+                .toString();
+    }
+
+    private void printMissingOrOverlapRecord(CompareMode compareMode, Key key, List<String> clusterLabels, String recordMetadataDesc) {
         if (compareMode == CompareMode.FIND_OVERLAP) {
-            System.out.printf("OVERLAPPING RECORD:(%s,%s,%s,%s) Found on clusters %s%s\n", key.namespace,key.setName, key.userKey, Buffer.bytesToHexString(key.digest), 
-                    missingFromClusters.stream().map(i->i+1).collect(Collectors.toList()), recordMetadataDesc);
+            System.out.printf("OVERLAPPING RECORD:(%s,%s,%s,%s) Found on clusters %s%s\n", key.namespace,key.setName, key.userKey, Buffer.bytesToHexString(key.digest),
+                    clusterLabels, recordMetadataDesc);
         }
         else {
-            System.out.printf("MISSING RECORD:(%s,%s,%s,%s) Missing from clusters %s%s\n", key.namespace,key.setName, key.userKey, Buffer.bytesToHexString(key.digest), 
-                    missingFromClusters.stream().map(i->i+1).collect(Collectors.toList()), recordMetadataDesc);
+            System.out.printf("MISSING RECORD:(%s,%s,%s,%s) Missing from clusters %s%s\n", key.namespace,key.setName, key.userKey, Buffer.bytesToHexString(key.digest),
+                    clusterLabels, recordMetadataDesc);
         }
+    }
+
+    @Override
+    public void handle(String namespace, int partitionId, long[] records, long[] tombstones, long[] netCounts) throws IOException {
+        System.out.printf("QUICK COMPARE PARTITION:(%s,%d) %s\n",
+                namespace,
+                partitionId,
+                CsvDifferenceHandler.buildQuickCompareHumanReadable(netCounts, resolver));
     }
 
     @Override
@@ -54,7 +76,8 @@ public class ConsoleDifferenceHandler implements MissingRecordHandler, RecordDif
             System.out.printf("DIFFERENCES: %s,%s,%s,%s\n", key.namespace, key.setName, key.userKey, Buffer.bytesToHexString(key.digest));
         }
         else {
-            System.out.printf("DIFFERENCES: %s,%s,%s,%s,%s\n", key.namespace, key.setName, key.userKey, Buffer.bytesToHexString(key.digest), differences.toString());
+            String diffDescription = differences.getBinsDifferent().toHumanString(missingFromClusters, resolver);
+            System.out.printf("DIFFERENCES: %s,%s,%s,%s,%s\n", key.namespace, key.setName, key.userKey, Buffer.bytesToHexString(key.digest), diffDescription);
         }
     }
 }

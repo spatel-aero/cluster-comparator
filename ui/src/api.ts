@@ -193,6 +193,7 @@ export async function deleteResultHistoryEntry(index: number): Promise<void> {
 export interface ProgressData {
   recordsProcessedPerCluster: number[];
   recordsMissingPerCluster: number[];
+  clusterLabels?: string[];
   recordsDifferent: number;
   totalMissingRecords: number;
   totalRecordsCompared: number;

@@ -132,6 +132,8 @@ Displays real-time comparison progress via Server-Sent Events:
 - Per-cluster **Records Processed** and **Records Missing** — the per-cluster processed column counts records **scanned** on that cluster (same idea as `records scanned:` in console progress). It is separate from how many records were **fully compared** across clusters.
 - **Total Missing** and **Records Different** — aggregate difference counts
 
+**Cluster labels** in the Progress and Results tables match the CLI and CSV output: `1`, `2`, … by default, or the names you set in each connection card’s **Cluster Name** field (same as `--clusterName1` / `--clusterName2`). See [Cluster numbering](reference.md#cluster-numbering) in the reference guide.
+
 When **date range filters** are enabled, the comparator may perform extra verification reads on records that looked missing within the range; per-cluster scan totals can grow beyond a naive “one pass per record” mental model, while the engine still tracks **records compared** separately (see **Results**).
 
 The elapsed timer stops when the run completes.

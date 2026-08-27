@@ -274,10 +274,18 @@ export default function App() {
           />
         </TabPanel>
         <TabPanel value={tab} index={2}>
-          <ProgressPanel progress={progress} state={runState} />
+          <ProgressPanel
+            progress={progress}
+            state={runState}
+            clusters={(options.clusters as ClusterConfig[] | undefined) || []}
+          />
         </TabPanel>
         <TabPanel value={tab} index={3}>
-          <ResultsPanel history={runHistory} onDelete={handleDeleteHistory} />
+          <ResultsPanel
+            history={runHistory}
+            onDelete={handleDeleteHistory}
+            clusters={(options.clusters as ClusterConfig[] | undefined) || []}
+          />
         </TabPanel>
       </Container>
       <Dialog open={noOutputFileDialogOpen} onClose={handleNoOutputFileGoBack} maxWidth="sm" fullWidth>

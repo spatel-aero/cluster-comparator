@@ -328,6 +328,30 @@ paths:
 
 ## 📊 Output Format Reference
 
+### Cluster numbering
+
+Clusters are identified internally using **0-based indices**, but all user-facing output uses **`clusterIdToName()`**:
+
+| Situation | Label shown |
+|-----------|-------------|
+| No `--clusterName1` / `--clusterName2` | `1`, `2`, `3`, … (1-based ordinals matching `-h1`, `-h2`, …) |
+| Custom cluster names configured | `"source"`, `"target"`, … (quoted names from config) |
+
+This applies consistently across console output, CSV headers (`Digest - 1`), progress lines (`records scanned: {1: …, 2: …}`), summaries, and JSON `"MISSING"` / `"OVERLAPPING"` / `"PARTITION_COUNT"` fields.
+
+Use `--clusterName1` and `--clusterName2` (or names in a YAML config file) when you want readable labels instead of ordinals:
+
+```bash
+java -jar cluster-comparator.jar \
+  --hosts1 source:3000 --clusterName1 source \
+  --hosts2 target:3000 --clusterName2 target \
+  --namespaces test --action scan --compareMode MISSING_RECORDS
+```
+
+**Bin-level JSON note:** `"cluster1"` and `"cluster2"` keys in record content diffs refer to the **pair of clusters being compared** in that difference row, not necessarily global cluster 1 and cluster 2 when comparing more than two clusters.
+
+**Compare mode name:** use `QUICK_NAMESPACE` for quick partition-level comparison (`-C QUICK_NAMESPACE` or `--compareMode QUICK_NAMESPACE`).
+
 ### CSV Output Columns
 ```csv
 namespace,set,digest,difference_type,cluster1,cluster2,bin_name,path,value1,value2,lut1,lut2

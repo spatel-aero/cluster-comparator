@@ -47,7 +47,17 @@ Quick record counts:
     cluster 1: (1,234,567 records, 45 tombstones)
     cluster 2: (1,234,520 records, 52 tombstones)
 Quick compare found 23 partitions different: [45, 67, 89, ...]
+QUICK COMPARE PARTITION:(production,45) Partition net object count mismatch: 1 net=1000, 2 net=995
 ```
+
+With `--file`, one CSV row is written per differing partition. Record-level columns (`Set`, `Key`, digests) are empty because quick compare only detects partition count mismatches:
+
+```csv
+Namespace,Set,Partition,Key,Digest - 1,Digest - 2,Diffs
+production,,45,,,,"Partition net object count mismatch: 1 net=1000, 2 net=995","{\"PARTITION_COUNT\":{\"1\":{\"records\":1005,\"tombstones\":5,\"net\":1000},\"2\":{\"records\":1002,\"tombstones\":7,\"net\":995}}}"
+```
+
+Use `--partitionList` with `MISSING_RECORDS` or another scan mode to investigate specific partitions from the CSV.
 
 ### When to use:
 - ✅ Post-bulk-load validation
@@ -56,6 +66,8 @@ Quick compare found 23 partitions different: [45, 67, 89, ...]
 - ❌ When you need to know which records differ
 - ❌ With specific sets (namespace-level only)
 - ❌ During migrations (data movement invalidates counts)
+
+Cluster labels in output use 1-based ordinals (`1`, `2`, …) or `--clusterName1` / `--clusterName2` when configured. See [Cluster numbering](../reference.md#cluster-numbering) in the reference guide.
 
 ## 2. MISSING_RECORDS 🔍 (Default)
 
@@ -80,10 +92,16 @@ java -jar cluster-comparator.jar \
 - Can be combined with actions like `scan_touch` for auto-repair
 
 ### Example output:
+```
+MISSING RECORD:(test,name,3,45b4...) Missing from clusters [2]
+Missing records on cluster 1 : 1
+Missing records on cluster 2 : 1
+```
+
 ```csv
-namespace,set,digest,difference_type,cluster1,cluster2
-userdata,profiles,abc123def456,MISSING,1,2
-userdata,sessions,def456ghi789,MISSING,2,1
+Namespace,Set,Partition,Key,Digest - 1,Digest - 2,Diffs
+test,name,1093,3,45b4...,,"{""MISSING"":[2]}",Missing from clusters: [2],
+test,name,4081,1,,f11f...,"{""MISSING"":[1]}",Missing from clusters: [1],
 ```
 
 ### When to use:
