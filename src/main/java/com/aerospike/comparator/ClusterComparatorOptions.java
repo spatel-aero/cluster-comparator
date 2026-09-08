@@ -31,6 +31,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 public class ClusterComparatorOptions implements ClusterNameResolver, NamespaceNameResolver {
     public static final int DEFAULT_AUTO_THREAD_CAP = 32;
     private static final String DEFAULT_DATE_FORMAT = "yyyy/MM/dd-HH:mm:ssZ";
+    private static final String EXAMPLE_DEFAULT_DATE = new SimpleDateFormat(DEFAULT_DATE_FORMAT).format(new Date());
     public static enum Action {
         SCAN(false, true),
         TOUCH(true, false),
@@ -310,10 +311,10 @@ public class ClusterComparatorOptions implements ClusterNameResolver, NamespaceN
         options.addOption("sa1", "useServicesAlternate1", false, "Use services alternative when connecting to cluster 1");
         options.addOption("sa2", "useServicesAlternate2", false, "Use services alternative when connecting to cluster 2");
         options.addOption("db", "beginDate", true, "Specify the begin date of the scan. Any records whose last update time is this time or greater will be included in the scan. The format of the date is "
-                + "by default "+DEFAULT_DATE_FORMAT+" but can be changed with -df flag. If the parameter is a just a number this will be treated as the number of milliseconds since 1/1/1970. If the end date "
+                + "by default "+DEFAULT_DATE_FORMAT+" (eg " + EXAMPLE_DEFAULT_DATE +") but can be changed with -df flag. If the parameter is a just a number this will be treated as the number of milliseconds since 1/1/1970. If the end date "
                 + "is also specified, only records falling between the 2 dates will be scanned. Default: scan from the start of time.");
         options.addOption("de", "endDate", true, "Specify the end date of the scan. Any records whose last update time is less than or equal to this time will be included in the scan. The format of the date is "
-                + "by default "+DEFAULT_DATE_FORMAT+" but can be changed with -df flag. If the parameter is a just a number this will be treated as the number of milliseconds since 1/1/1970. If the start date "
+                + "by default "+DEFAULT_DATE_FORMAT+" (eg " + EXAMPLE_DEFAULT_DATE +" but can be changed with -df flag. If the parameter is a just a number this will be treated as the number of milliseconds since 1/1/1970. If the start date "
                 + "is also specified, only records falling between the 2 dates will be scanned. Default: scan until the end of time.");
         options.addOption("df", "dateFormat", true, "Format used to convert the dates passed with the -db and -de flags. Should conform to the spec of SimpleDateFormat.");
         options.addOption("pf", "pathOptionsFile", true, "YAML file used to contain path options. The options are used to determine whether to ignore paths or "
