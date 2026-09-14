@@ -5,6 +5,14 @@ name: Release
 # people who can't build the project themselves (e.g. behind a corporate
 # firewall that blocks the Node.js/npm download used to rebuild the UI)
 # can just download a working jar.
+#
+# Cutting a release:
+#   1. Bump <version> in pom.xml to the release version, commit/PR, merge to main.
+#   2. Tag that exact commit: git tag vX.Y.Z && git push origin vX.Y.Z.
+# This workflow does NOT change pom.xml itself - it verifies the tag matches
+# pom.xml's version and fails fast with a clear error if they don't, rather
+# than silently publishing a jar whose filename doesn't match what you'd get
+# rebuilding that same tag yourself.
 on:
   push:
     tags:
@@ -32,6 +40,18 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+
+      - name: Verify pom.xml version matches the tag
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          EXPECTED="${TAG#v}"
+          ACTUAL="$(./mvnw -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::pom.xml version is '$ACTUAL' but tag $TAG expects '$EXPECTED'."
+            echo "::error::Bump <version> in pom.xml to $EXPECTED and merge that to main BEFORE tagging - see the comment at the top of release.yml."
+            exit 1
+          fi
 
       - name: Build full jar (includes web UI)
         run: ./mvnw -B clean package -DskipTests
