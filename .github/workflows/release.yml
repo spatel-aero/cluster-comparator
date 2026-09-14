@@ -9,9 +9,10 @@ name: Release
 # The Maven project version (pom.xml) is set to match the tag before
 # building, so e.g. tag v1.3.0 always produces
 # ClusterComparator-1.3.0-full.jar regardless of what pom.xml said at the
-# tagged commit. That version is then synced back to the default branch
-# (a no-op if pom.xml is already at that version) so the source tree
-# doesn't drift from what was actually released.
+# tagged commit. That version is then synced back to the default branch via
+# a PR (a no-op if pom.xml is already at that version) so the source tree
+# doesn't drift from what was actually released - a PR rather than a direct
+# push because the default branch may have protection rules requiring it.
 on:
   push:
     tags:
@@ -24,6 +25,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   release:
@@ -66,13 +68,17 @@ jobs:
           generate_release_notes: true
 
       - name: Sync pom.xml version back to the default branch
+        continue-on-error: true # a hiccup here shouldn't mark an already-published release as failed
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          SYNC_BRANCH="bot/sync-version-$VERSION"
+
           git fetch origin "$DEFAULT_BRANCH"
-          git checkout -B "$DEFAULT_BRANCH" "origin/$DEFAULT_BRANCH"
+          git checkout -B "$SYNC_BRANCH" "origin/$DEFAULT_BRANCH"
 
           # Reapply on top of the default branch's current tip, in case it
           # has moved on since the tag was cut.
@@ -85,5 +91,19 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore: sync pom.xml version to $VERSION [skip ci]" -- pom.xml
-          git push origin "HEAD:$DEFAULT_BRANCH"
+          git commit -m "chore: sync pom.xml version to $VERSION" -- pom.xml
+
+          # Push to a dedicated branch and open a PR rather than pushing
+          # straight to the default branch - it's commonly protected
+          # (required reviews/checks), which a direct push would fail against.
+          git push --force origin "$SYNC_BRANCH:$SYNC_BRANCH"
+
+          if [ "$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq 'length')" = "0" ]; then
+            gh pr create \
+              --base "$DEFAULT_BRANCH" \
+              --head "$SYNC_BRANCH" \
+              --title "chore: sync pom.xml version to $VERSION" \
+              --body "Automated follow-up to the $VERSION release: keeps pom.xml in sync with what was actually published. Safe to merge."
+          else
+            echo "PR for $SYNC_BRANCH already open, branch updated above"
+          fi
