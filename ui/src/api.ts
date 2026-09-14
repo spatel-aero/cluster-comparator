@@ -203,6 +203,15 @@ export interface ProgressData {
   outputFile: string | null;
   state: string;
   completedAt: number;
+  recordsProcessedThisScanPerCluster?: number[];
+  currentNamespace?: string | null;
+  currentSetName?: string | null;
+  currentNamespaceIndex?: number;
+  namespaceCount?: number;
+  currentSetIndex?: number;
+  setCount?: number;
+  elapsedThisScanMs?: number;
+  elapsedTotalMs?: number;
 }
 
 export function subscribeProgress(

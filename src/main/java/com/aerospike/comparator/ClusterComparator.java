@@ -64,6 +64,7 @@ public class ClusterComparator {
     private final int startPartition;
     private final int endPartition;
     private final AtomicLongArray recordsProcessedOnCluster;
+    private final AtomicLongArray cumulativeRecordsProcessedOnCluster;
     private final AtomicLongArray recordsMissingOnCluster;
     private final AtomicLong recordsDifferentCount = new AtomicLong();
     private final AtomicLong totalMissingRecords = new AtomicLong();
@@ -89,6 +90,15 @@ public class ClusterComparator {
     private WritePolicy writePolicyToUse;
     private boolean hasDoneFirstDelete = false;
     private AtomicBoolean hasChallengeActive = new AtomicBoolean(false);
+
+    private volatile long comparisonStartTime;
+    private volatile long currentUnitStartTime;
+    private volatile String currentNamespace;
+    private volatile String currentSetName;
+    private volatile int currentNamespaceIndex;
+    private volatile int namespaceCount;
+    private volatile int currentSetIndex;
+    private volatile int setCount;
 
     int getStartPartition() {
         return startPartition;
@@ -197,6 +207,7 @@ public class ClusterComparator {
         }
         numberOfClusters = this.options.getClusterConfigs().size();
         recordsProcessedOnCluster = new AtomicLongArray(numberOfClusters);
+        cumulativeRecordsProcessedOnCluster = new AtomicLongArray(numberOfClusters);
         recordsMissingOnCluster = new AtomicLongArray(numberOfClusters);
 
         this.setupPolicies();
@@ -242,7 +253,7 @@ public class ClusterComparator {
         }
     }
     
-    private String getPartitionsComplete() {
+    String getPartitionsComplete() {
         StringBuilder sb = new StringBuilder().append('[');
         int partitionCount = endPartition - startPartition;
         int runCount = 0;
@@ -264,6 +275,77 @@ public class ClusterComparator {
         }
         addInPartitions(sb, runCount, partitionCount);
         return sb.append(']').toString();
+    }
+
+    void resetPartitionsComplete() {
+        for (int i = 0; i < partitionsComplete.length; i++) {
+            partitionsComplete[i].set(false);
+        }
+    }
+
+    /**
+     * Roll the previous scan unit's record counts into the run total and reset
+     * per-scan partition flags so the next namespace/set starts from a clean slate.
+     */
+    void startComparisonUnit(String namespace, String setName, int namespaceIndex, int namespaceCount,
+            int setIndex, int setCount) {
+        for (int i = 0; i < numberOfClusters; i++) {
+            cumulativeRecordsProcessedOnCluster.addAndGet(i, recordsProcessedOnCluster.get(i));
+            recordsProcessedOnCluster.set(i, 0);
+        }
+        resetPartitionsComplete();
+        this.failedPartitionsList.clear();
+        this.currentNamespace = namespace;
+        this.currentSetName = setName;
+        this.currentNamespaceIndex = namespaceIndex;
+        this.namespaceCount = namespaceCount;
+        this.currentSetIndex = setIndex;
+        this.setCount = setCount;
+        this.currentUnitStartTime = System.currentTimeMillis();
+        if (this.comparisonStartTime == 0) {
+            this.comparisonStartTime = this.currentUnitStartTime;
+        }
+    }
+
+    boolean hasMultipleScanUnits() {
+        return namespaceCount > 1 || setCount > 1;
+    }
+
+    String formatProgressScope() {
+        StringBuilder sb = new StringBuilder();
+        if (currentNamespace != null && (namespaceCount > 1 || setCount > 1)) {
+            sb.append("Namespace ").append(currentNamespace);
+            if (namespaceCount > 1) {
+                sb.append(" [").append(currentNamespaceIndex).append('/').append(namespaceCount).append(']');
+            }
+        }
+        if (setCount > 1 && currentSetName != null) {
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append("set ").append(currentSetName)
+                    .append(" [").append(currentSetIndex).append('/').append(setCount).append(']');
+        }
+        return sb.toString();
+    }
+
+    private String currentUnitTimeLabel() {
+        return setCount > 1 ? "this set" : "this namespace";
+    }
+
+    private void printProgressPrefix(long elapsedThisScanMs, long elapsedTotalMs) {
+        if (hasMultipleScanUnits()) {
+            String scope = formatProgressScope();
+            if (scope.isEmpty()) {
+                System.out.printf("%,dms %s / %,dms total: ", elapsedThisScanMs, currentUnitTimeLabel(), elapsedTotalMs);
+            }
+            else {
+                System.out.printf("%,dms %s / %,dms total: %s: ", elapsedThisScanMs, currentUnitTimeLabel(), elapsedTotalMs, scope);
+            }
+        }
+        else {
+            System.out.printf("%,dms: ", elapsedThisScanMs);
+        }
     }
     private String tlsPolicyAsString(TlsPolicy policy) {
         if (policy == null) {
@@ -1187,6 +1269,8 @@ public class ClusterComparator {
     }
     
     private void beginComparison(AerospikeClientAccess[] clients, String namespace, String setName) throws InterruptedException {
+        startComparisonUnit(namespace, setName, this.currentNamespaceIndex, this.namespaceCount,
+                this.currentSetIndex, this.setCount);
         Runnable runner = null;
         if (options.isQuickCompare()) {
             try {
@@ -1228,7 +1312,7 @@ public class ClusterComparator {
         }
         else {
             if (options.getPartitionList() != null) {
-                this.partitionList = options.getPartitionList();
+                this.partitionList = new ArrayList<>(options.getPartitionList());
             }
             else {
                 this.partitionList = IntStream.range(startPartition, endPartition).boxed().collect(Collectors.toList());
@@ -1247,9 +1331,15 @@ public class ClusterComparator {
     
     private void performComparisons(AerospikeClientAccess[] clients) throws InterruptedException {
         this.filterExpression = formFilterExpression();
+        this.comparisonStartTime = System.currentTimeMillis();
+        String[] namespaces = options.getNamespaces();
+        String[] sets = options.getSetNames();
+        this.namespaceCount = namespaces == null ? 0 : namespaces.length;
+        this.setCount = (sets == null || sets.length == 0) ? 0 : sets.length;
         for (int i = 0; i < clients.length; i++) {
             recordsMissingOnCluster.set(i, 0);
             recordsProcessedOnCluster.set(i, 0);
+            cumulativeRecordsProcessedOnCluster.set(i, 0);
         }
 
         if (options.isMetadataCompare()) {
@@ -1258,17 +1348,22 @@ public class ClusterComparator {
             // TODO: Should the result be used in the summary?
         }
         if (options.getAction() == Action.RERUN) {
+            this.namespaceCount = 0;
+            this.setCount = 0;
             beginComparison(clients, null, null);
         }
         else {
-            for (String namespace : options.getNamespaces()) {
-                String[] sets = options.getSetNames();
-                if (sets == null || sets.length == 0) {
+            for (int nsIdx = 0; nsIdx < namespaces.length; nsIdx++) {
+                String namespace = namespaces[nsIdx];
+                this.currentNamespaceIndex = nsIdx + 1;
+                if (this.setCount == 0) {
+                    this.currentSetIndex = 0;
                     beginComparison(clients, namespace, null);
                 }
                 else {
-                    for (String thisSet : sets) {
-                        beginComparison(clients, namespace, thisSet);
+                    for (int setIdx = 0; setIdx < sets.length; setIdx++) {
+                        this.currentSetIndex = setIdx + 1;
+                        beginComparison(clients, namespace, sets[setIdx]);
                     }
                 }
             }
@@ -1280,6 +1375,10 @@ public class ClusterComparator {
     
     private void showSummary() {
         if (!options.isSilent()) {
+            String scope = formatProgressScope();
+            if (!scope.isEmpty()) {
+                System.out.printf("Completed %s\n", scope);
+            }
             if (options.isRecordLevelCompare()) {
                 forEachCluster((i, c) -> System.out.printf("Missing records on cluster %s : %,d\n", options.clusterIdToName(i), this.recordsMissingOnCluster.get(i)));
                 System.out.printf("Records different         : %,d\n"
@@ -1326,41 +1425,65 @@ public class ClusterComparator {
                 System.out.println("Comparison started using input file: " + options.getInputFileName());
             }
             else {
-                System.out.println("Comparison started for namespace " + namespace + ((setName == null) ?  "." : (", set " + setName + ".")));
+                String scope = formatProgressScope();
+                if (!scope.isEmpty()) {
+                    System.out.println("Comparison started for " + scope + ".");
+                }
+                else {
+                    System.out.println("Comparison started for namespace " + namespace + ((setName == null) ?  "." : (", set " + setName + ".")));
+                }
             }
         }
         long[] lastRecordsForCluster = new long[numberOfClusters];
         long[] currentRecordsForCluster = new long[numberOfClusters];
         forEachCluster((i, c) -> lastRecordsForCluster[i] = 0);
         
-        long startTime = System.currentTimeMillis();
+        this.currentUnitStartTime = System.currentTimeMillis();
+        long startTime = this.currentUnitStartTime;
         while (activeThreads.get() > 0) {
             Thread.sleep(1000);
             long totalCurrentRecords = 0;
             long recordsThisSecond = 0;
+            long totalCumulativeRecords = 0;
             for (int i = 0; i < numberOfClusters; i++) {
                 currentRecordsForCluster[i] = this.recordsProcessedOnCluster.get(i);
                 totalCurrentRecords += currentRecordsForCluster[i];
                 recordsThisSecond += currentRecordsForCluster[i] - lastRecordsForCluster[i];
+                totalCumulativeRecords += this.cumulativeRecordsProcessedOnCluster.get(i) + currentRecordsForCluster[i];
             };
             int nextPartition = this.partitionList.size();
             int activeThreads = this.activeThreads.get();
             long now = System.currentTimeMillis();
-            long elapsedMilliseconds = now - startTime;
+            long elapsedMilliseconds = Math.max(now - startTime, 1);
+            long elapsedTotalMilliseconds = Math.max(now - this.comparisonStartTime, 1);
             if (!options.isSilent() && !hasChallengeActive.get()) {
                 if (options.getAction() != Action.RERUN) {
-                    System.out.printf("%,dms: [%d-%d, remaining %d, complete:%s], active threads: %d, records scanned: {",
-                            (now-startTime), this.startPartition, this.endPartition, nextPartition, getPartitionsComplete(), activeThreads);
+                    printProgressPrefix(now - startTime, elapsedTotalMilliseconds);
+                    System.out.printf("[%d-%d, remaining %d, complete:%s], active threads: %d, records scanned: {",
+                            this.startPartition, this.endPartition, nextPartition, getPartitionsComplete(), activeThreads);
                 }
                 else {
                     long remaining = recordsRemaining.get();
-                    System.out.printf("%,dms: [buffer lines: %d%s], active threads: %d, records scanned: {", 
-                            (now-startTime), remaining, remaining == FileLoadingProcessor.MAX_QUEUE_DEPTH ? "+" : "", activeThreads);
+                    printProgressPrefix(now - startTime, elapsedTotalMilliseconds);
+                    System.out.printf("[buffer lines: %d%s], active threads: %d, records scanned: {", 
+                            remaining, remaining == FileLoadingProcessor.MAX_QUEUE_DEPTH ? "+" : "", activeThreads);
                 }
                 forEachCluster((i, c) -> System.out.printf("%s%s: %,d", i > 0 ? ", ": "" , options.clusterIdToName(i), currentRecordsForCluster[i]));
-                System.out.printf("} throughput: {last second: %,d rps, overall: %,d rps}\n", 
-                        recordsThisSecond/numberOfClusters,
-                        (totalCurrentRecords)*1000/2/elapsedMilliseconds);
+                if (hasMultipleScanUnits()) {
+                    System.out.print("} cumulative: {");
+                    forEachCluster((i, c) -> System.out.printf("%s%s: %,d", i > 0 ? ", ": "" , options.clusterIdToName(i),
+                            this.cumulativeRecordsProcessedOnCluster.get(i) + currentRecordsForCluster[i]));
+                    System.out.printf("} throughput: {last second: %,d rps, %s: %,d rps, overall: %,d rps}\n",
+                            recordsThisSecond / numberOfClusters,
+                            currentUnitTimeLabel(),
+                            totalCurrentRecords * 1000 / numberOfClusters / elapsedMilliseconds,
+                            totalCumulativeRecords * 1000 / numberOfClusters / elapsedTotalMilliseconds);
+                }
+                else {
+                    System.out.printf("} throughput: {last second: %,d rps, overall: %,d rps}\n", 
+                            recordsThisSecond / numberOfClusters,
+                            totalCurrentRecords * 1000 / numberOfClusters / elapsedMilliseconds);
+                }
             }
             forEachCluster((i, c) -> lastRecordsForCluster[i] = currentRecordsForCluster[i]);
         }
@@ -1696,15 +1819,21 @@ public class ClusterComparator {
             }
         }
         long[] processedPerCluster = new long[numberOfClusters];
+        long[] processedThisScanPerCluster = new long[numberOfClusters];
         long[] missingPerCluster = new long[numberOfClusters];
         String[] clusterLabels = new String[numberOfClusters];
         for (int i = 0; i < numberOfClusters; i++) {
-            processedPerCluster[i] = recordsProcessedOnCluster.get(i);
+            processedThisScanPerCluster[i] = recordsProcessedOnCluster.get(i);
+            processedPerCluster[i] = cumulativeRecordsProcessedOnCluster.get(i) + processedThisScanPerCluster[i];
             missingPerCluster[i] = recordsMissingOnCluster.get(i);
             clusterLabels[i] = options.clusterIdToName(i);
         }
+        long now = System.currentTimeMillis();
+        long elapsedThisScan = currentUnitStartTime == 0 ? 0 : Math.max(now - currentUnitStartTime, 0);
+        long elapsedTotal = comparisonStartTime == 0 ? 0 : Math.max(now - comparisonStartTime, 0);
         return new ProgressSnapshot(
                 processedPerCluster,
+                processedThisScanPerCluster,
                 missingPerCluster,
                 clusterLabels,
                 recordsDifferentCount.get(),
@@ -1713,7 +1842,15 @@ public class ClusterComparator {
                 completeCount,
                 partitionCount,
                 forceTerminate,
-                options.getOutputFileName()
+                options.getOutputFileName(),
+                currentNamespace,
+                currentSetName,
+                currentNamespaceIndex,
+                namespaceCount,
+                currentSetIndex,
+                setCount,
+                elapsedThisScan,
+                elapsedTotal
         );
     }
     

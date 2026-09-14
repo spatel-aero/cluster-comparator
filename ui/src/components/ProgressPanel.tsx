@@ -67,11 +67,34 @@ export default function ProgressPanel({ progress, state, clusters = [] }: Progre
   const endTime = endTimeRef.current || Date.now();
   const elapsed = startTimeRef.current ? Math.round((endTime - startTimeRef.current) / 1000) : 0;
   const elapsedStr = `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+  const thisScanSecs = progress.elapsedThisScanMs != null ? Math.round(progress.elapsedThisScanMs / 1000) : elapsed;
+  const thisScanStr = `${Math.floor(thisScanSecs / 60)}m ${thisScanSecs % 60}s`;
+  const namespaceCount = progress.namespaceCount || 0;
+  const setCount = progress.setCount || 0;
+  const multiScan = namespaceCount > 1 || setCount > 1;
+  const scopeParts: string[] = [];
+  if (progress.currentNamespace) {
+    const nsLabel = namespaceCount > 1
+      ? `Namespace ${progress.currentNamespace} [${progress.currentNamespaceIndex}/${namespaceCount}]`
+      : `Namespace ${progress.currentNamespace}`;
+    scopeParts.push(nsLabel);
+  }
+  if (progress.currentSetName && setCount > 1) {
+    scopeParts.push(`set ${progress.currentSetName} [${progress.currentSetIndex}/${setCount}]`);
+  }
 
   return (
     <Paper sx={{ p: 3, boxShadow: 2 }}>
+      {scopeParts.length > 0 && (
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+          {scopeParts.join(', ')}
+        </Typography>
+      )}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid size={{ xs: 6, sm: 3 }}><StatCard label="Elapsed" value={elapsedStr} /></Grid>
+        <Grid size={{ xs: 6, sm: 3 }}><StatCard label={multiScan ? 'Elapsed (total)' : 'Elapsed'} value={elapsedStr} /></Grid>
+        {multiScan && (
+          <Grid size={{ xs: 6, sm: 3 }}><StatCard label="Elapsed (this scan)" value={thisScanStr} /></Grid>
+        )}
         <Grid size={{ xs: 6, sm: 3 }}><StatCard label="Throughput (rec/s)" value={throughput.toLocaleString()} /></Grid>
         <Grid size={{ xs: 6, sm: 3 }}><StatCard label="Total Missing" value={progress.totalMissingRecords.toLocaleString()} /></Grid>
         <Grid size={{ xs: 6, sm: 3 }}><StatCard label="Records Different" value={progress.recordsDifferent.toLocaleString()} /></Grid>
@@ -79,7 +102,9 @@ export default function ProgressPanel({ progress, state, clusters = [] }: Progre
 
       <Stack spacing={0.5} sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Typography variant="body2">Partitions: {progress.partitionsComplete} / {progress.totalPartitions}</Typography>
+          <Typography variant="body2">
+            Partitions{progress.currentNamespace ? ` (${progress.currentNamespace})` : ''}: {progress.partitionsComplete} / {progress.totalPartitions}
+          </Typography>
           <Typography variant="body2" sx={{ fontWeight: 600 }}>{pct}%</Typography>
         </Box>
         <LinearProgress variant="determinate" value={pct} sx={{ height: 8, borderRadius: 4 }} />

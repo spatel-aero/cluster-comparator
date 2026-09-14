@@ -2,6 +2,7 @@ package com.aerospike.comparator.web;
 
 public class ProgressSnapshot {
     private final long[] recordsProcessedPerCluster;
+    private final long[] recordsProcessedThisScanPerCluster;
     private final long[] recordsMissingPerCluster;
     private final String[] clusterLabels;
     private final long recordsDifferent;
@@ -11,13 +12,24 @@ public class ProgressSnapshot {
     private final int totalPartitions;
     private final boolean forceTerminated;
     private final String outputFile;
+    private final String currentNamespace;
+    private final String currentSetName;
+    private final int currentNamespaceIndex;
+    private final int namespaceCount;
+    private final int currentSetIndex;
+    private final int setCount;
+    private final long elapsedThisScanMs;
+    private final long elapsedTotalMs;
     private String state;
     private long completedAt;
 
-    public ProgressSnapshot(long[] recordsProcessedPerCluster, long[] recordsMissingPerCluster,
-            String[] clusterLabels, long recordsDifferent, long totalMissingRecords, long totalRecordsCompared,
-            int partitionsComplete, int totalPartitions, boolean forceTerminated, String outputFile) {
+    public ProgressSnapshot(long[] recordsProcessedPerCluster, long[] recordsProcessedThisScanPerCluster,
+            long[] recordsMissingPerCluster, String[] clusterLabels, long recordsDifferent, long totalMissingRecords,
+            long totalRecordsCompared, int partitionsComplete, int totalPartitions, boolean forceTerminated,
+            String outputFile, String currentNamespace, String currentSetName, int currentNamespaceIndex,
+            int namespaceCount, int currentSetIndex, int setCount, long elapsedThisScanMs, long elapsedTotalMs) {
         this.recordsProcessedPerCluster = recordsProcessedPerCluster;
+        this.recordsProcessedThisScanPerCluster = recordsProcessedThisScanPerCluster;
         this.recordsMissingPerCluster = recordsMissingPerCluster;
         this.clusterLabels = clusterLabels;
         this.recordsDifferent = recordsDifferent;
@@ -27,10 +39,22 @@ public class ProgressSnapshot {
         this.totalPartitions = totalPartitions;
         this.forceTerminated = forceTerminated;
         this.outputFile = outputFile;
+        this.currentNamespace = currentNamespace;
+        this.currentSetName = currentSetName;
+        this.currentNamespaceIndex = currentNamespaceIndex;
+        this.namespaceCount = namespaceCount;
+        this.currentSetIndex = currentSetIndex;
+        this.setCount = setCount;
+        this.elapsedThisScanMs = elapsedThisScanMs;
+        this.elapsedTotalMs = elapsedTotalMs;
     }
 
     public long[] getRecordsProcessedPerCluster() {
         return recordsProcessedPerCluster;
+    }
+
+    public long[] getRecordsProcessedThisScanPerCluster() {
+        return recordsProcessedThisScanPerCluster;
     }
 
     public long[] getRecordsMissingPerCluster() {
@@ -67,6 +91,38 @@ public class ProgressSnapshot {
 
     public String getOutputFile() {
         return outputFile;
+    }
+
+    public String getCurrentNamespace() {
+        return currentNamespace;
+    }
+
+    public String getCurrentSetName() {
+        return currentSetName;
+    }
+
+    public int getCurrentNamespaceIndex() {
+        return currentNamespaceIndex;
+    }
+
+    public int getNamespaceCount() {
+        return namespaceCount;
+    }
+
+    public int getCurrentSetIndex() {
+        return currentSetIndex;
+    }
+
+    public int getSetCount() {
+        return setCount;
+    }
+
+    public long getElapsedThisScanMs() {
+        return elapsedThisScanMs;
+    }
+
+    public long getElapsedTotalMs() {
+        return elapsedTotalMs;
     }
 
     public String getState() {
