@@ -60,6 +60,20 @@ Time-filtered comparisons add `--beginDate` and optionally `--endDate`; see [Val
 | **[Troubleshooting & Performance](docs/troubleshooting.md)** | Common issues, optimization, and security |
 | **[Quick Reference](docs/reference.md)** | Command patterns, parameters, and examples |
 
+## 🛠️ Building From Source
+
+Prebuilt jars (with the web UI included) are attached to each [GitHub Release](../../releases) — check there first if you'd rather not build at all.
+
+If you don't already have `cluster-comparator.jar`, build it with:
+
+```bash
+mvn clean package -DskipUi
+```
+
+The jar (`target/ClusterComparator-<version>-full.jar`) includes everything, including a working web UI — this command uses the pre-built UI assets already committed to the repo, so it needs nothing beyond normal Maven dependency access (no Node.js, no npm). **This is the build to use behind a corporate firewall or proxy.**
+
+Only drop `-DskipUi` if you're actively developing the web UI and need to regenerate it from source — that path downloads Node.js and npm packages from the internet and is commonly blocked by corporate firewalls. See [Building the Web Interface](docs/web-ui.md#building) for details.
+
 ## 🔄 Basic Workflow
 
 1. **Choose your comparison mode** based on your needs:
