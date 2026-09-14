@@ -1,0 +1,48 @@
+name: Release
+
+# Publishes a ready-to-run jar (web UI included, no build required) as a
+# GitHub Release asset whenever a version tag is pushed. This exists so
+# people who can't build the project themselves (e.g. behind a corporate
+# firewall that blocks the Node.js/npm download used to rebuild the UI)
+# can just download a working jar.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re)publish a release for'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build full jar (includes web UI)
+        run: ./mvnw -B clean package -DskipTests
+
+      - name: Determine jar path
+        id: jar
+        run: echo "path=$(ls target/ClusterComparator-*-full.jar)" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: ${{ steps.jar.outputs.path }}
+          generate_release_notes: true
