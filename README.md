@@ -4,6 +4,25 @@
 
 The Aerospike Cluster Comparator is a powerful utility for comparing data between two or more Aerospike clusters. It helps you verify data consistency, identify missing or different records, and take corrective actions across distributed environments.
 
+## 📥 Getting the Jar
+
+Every tagged release publishes a ready-to-run jar — web UI included — to this repo's [GitHub Releases](../../releases). **Most people should start there, not by building from source** — this is what makes the tool usable for anyone who can't build it themselves, e.g. behind a corporate firewall (see [Building From Source](#-building-from-source) below for why building can fail in that situation).
+
+```mermaid
+flowchart LR
+    A["Maintainer bumps\npom.xml version\n(release.sh)"] --> B["Merge to main"]
+    B --> C["Tag pushed / Release\npublished on GitHub"]
+    C --> D["release.yml builds\nthe full jar\n(UI included)"]
+    D --> E["Jar attached to\nthe GitHub Release"]
+    E --> F["Anyone downloads\nthe jar — no build,\nno Maven, no Node"]
+```
+
+1. A maintainer bumps the version and merges it to `main`, then tags that commit and publishes a GitHub Release for it (see [Cutting a Release](#cutting-a-release-maintainers) below).
+2. That tag automatically triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds the full jar and attaches it to the release — no one needs to build anything for this to happen.
+3. Anyone — including customers with no Maven/Node access at all — downloads the finished jar straight from the [Releases page](../../releases) and runs it.
+
+Only continue to [Building From Source](#-building-from-source) if a release doesn't yet exist for what you need, or you're modifying the code yourself.
+
 ## 🚀 Quick Start
 
 ### Basic Comparison
@@ -60,7 +79,7 @@ Time-filtered comparisons add `--beginDate` and optionally `--endDate`; see [Val
 | **[Troubleshooting & Performance](docs/troubleshooting.md)** | Common issues, optimization, and security |
 | **[Quick Reference](docs/reference.md)** | Command patterns, parameters, and examples |
 
-## 🛠️ Building From Source
+## 🔧 Building From Source
 
 Prebuilt jars (with the web UI included) are attached to each [GitHub Release](../../releases) — check there first if you'd rather not build at all.
 
