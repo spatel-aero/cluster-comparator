@@ -67,8 +67,10 @@ Prebuilt jars (with the web UI included) are attached to each [GitHub Release](.
 If you don't already have `cluster-comparator.jar`, build it with:
 
 ```bash
-mvn clean package -DskipUi
+./mvnw clean package -DskipUi
 ```
+
+The included [Maven wrapper](https://maven.apache.org/wrapper/) (`mvnw` / `mvnw.cmd`) means you don't need Maven installed locally — it downloads the right Maven version itself the first time you run it. If you already have Maven installed, `mvn clean package -DskipUi` works the same way.
 
 The jar (`target/ClusterComparator-<version>-full.jar`) includes everything, including a working web UI — this command uses the pre-built UI assets already committed to the repo, so it needs nothing beyond normal Maven dependency access (no Node.js, no npm). **This is the build to use behind a corporate firewall or proxy.**
 

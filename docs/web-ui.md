@@ -50,22 +50,24 @@ Users must enter this password before accessing the interface. The password is v
 ### Recommended Build (offline-friendly, includes a working UI)
 
 ```bash
-mvn clean package -DskipUi
+./mvnw clean package -DskipUi
 ```
 
 This is the build most people — especially anyone behind a corporate firewall or proxy — should use. It compiles only the Java code and packages the **pre-built UI assets already committed to the repository** (`src/main/resources/webapp/`) into the jar. The web interface works exactly as shipped; it just won't reflect local UI source changes. This build needs nothing beyond your normal Maven dependency access (Maven Central or your internal mirror) — no Node.js, no npm, no additional outbound access.
+
+The `./mvnw` wrapper downloads the right Maven version itself, so you don't need Maven installed locally. If you already have Maven, `mvn clean package -DskipUi` does the same thing.
 
 > **Not sure which build to use?** Use this one, unless you are actively editing the React UI source under `ui/`.
 
 ### Full Build (rebuilds the UI from source)
 
 ```bash
-mvn clean package
+./mvnw clean package
 ```
 
 Without `-DskipUi`, Maven activates the `build-ui` profile, which uses the `frontend-maven-plugin` to **download a Node.js binary directly from nodejs.org and npm packages from the npm registry**, then runs `npm install && npm run build` to regenerate `src/main/resources/webapp/` from `ui/`. This is what you want when you've changed UI source and need the jar to reflect it.
 
-⚠️ **This is the build that fails behind restrictive corporate firewalls.** Direct binary downloads from `nodejs.org`/`registry.npmjs.org` are commonly blocked even when Maven Central (or an internal Artifactory/Nexus mirror) is reachable. If `mvn clean package` fails with a download/connection error during the `frontend-maven-plugin` steps, switch to the recommended build above — it does not need Node or npm at all.
+⚠️ **This is the build that fails behind restrictive corporate firewalls.** Direct binary downloads from `nodejs.org`/`registry.npmjs.org` are commonly blocked even when Maven Central (or an internal Artifactory/Nexus mirror) is reachable. If this fails with a download/connection error during the `frontend-maven-plugin` steps, switch to the recommended build above — it does not need Node or npm at all.
 
 ### Developing the UI
 

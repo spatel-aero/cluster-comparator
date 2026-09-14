@@ -19,7 +19,7 @@ This document covers common issues, performance optimization, security best prac
 
 # ✅ Build without rebuilding the UI — uses the pre-built UI assets already
 # committed to the repo, needs nothing beyond your normal Maven dependency access
-mvn clean package -DskipUi
+./mvnw clean package -DskipUi
 ```
 See [Building From Source](../README.md#-building-from-source) and [Building the Web Interface](web-ui.md#building) for details.
 
