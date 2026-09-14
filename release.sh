@@ -5,6 +5,20 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
+# Modern JDKs (24+) print a wall of harmless advance-notice warnings for
+# things Maven's bundled libraries do today (native access, sun.misc.Unsafe,
+# reflective final-field mutation) that a future JDK will restrict. Hide
+# that noise on success; show it in full if the command actually fails.
+run_quiet() {
+  local err
+  err="$(mktemp)"
+  trap 'rm -f "$err"' RETURN
+  if ! "$@" 2>"$err"; then
+    cat "$err" >&2
+    return 1
+  fi
+}
+
 usage() {
   cat <<'EOF'
 Usage: ./release.sh <major|minor|patch|X.Y.Z>
@@ -56,7 +70,10 @@ case "$BUMP" in
     ;;
 esac
 
-CURRENT="$(./mvnw -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
+if ! CURRENT="$(run_quiet ./mvnw -q -B help:evaluate -Dexpression=project.version -DforceStdout)"; then
+  echo "error: failed to read the project version from pom.xml (see Maven output above)." >&2
+  exit 1
+fi
 
 if [ "$BUMP" = "major" ] || [ "$BUMP" = "minor" ] || [ "$BUMP" = "patch" ]; then
   if [[ ! "$CURRENT" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
@@ -84,7 +101,10 @@ echo "Current version: $CURRENT"
 echo "New version:     $NEW"
 echo
 
-./mvnw -q -B versions:set -DnewVersion="$NEW" -DgenerateBackupPoms=false
+if ! run_quiet ./mvnw -q -B versions:set -DnewVersion="$NEW" -DgenerateBackupPoms=false; then
+  echo "error: failed to update pom.xml to $NEW (see Maven output above)." >&2
+  exit 1
+fi
 echo "pom.xml updated to $NEW"
 
 cat <<EOF
