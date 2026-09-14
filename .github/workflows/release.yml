@@ -6,13 +6,13 @@ name: Release
 # firewall that blocks the Node.js/npm download used to rebuild the UI)
 # can just download a working jar.
 #
-# The Maven project version (pom.xml) is set to match the tag before
-# building, so e.g. tag v1.3.0 always produces
-# ClusterComparator-1.3.0-full.jar regardless of what pom.xml said at the
-# tagged commit. That version is then synced back to the default branch via
-# a PR (a no-op if pom.xml is already at that version) so the source tree
-# doesn't drift from what was actually released - a PR rather than a direct
-# push because the default branch may have protection rules requiring it.
+# Cutting a release:
+#   1. Bump <version> in pom.xml to the release version, commit/PR, merge to main.
+#   2. Tag that exact commit: git tag vX.Y.Z && git push origin vX.Y.Z.
+# This workflow does NOT change pom.xml itself - it verifies the tag matches
+# pom.xml's version and fails fast with a clear error if they don't, rather
+# than silently publishing a jar whose filename doesn't match what you'd get
+# rebuilding that same tag yourself.
 on:
   push:
     tags:
@@ -25,7 +25,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   release:
@@ -42,16 +41,17 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Derive release version from tag
-        id: version
+      - name: Verify pom.xml version matches the tag
         run: |
           set -euo pipefail
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Set Maven project version to match the tag
-        run: ./mvnw -q -B versions:set -DnewVersion=${{ steps.version.outputs.version }} -DgenerateBackupPoms=false
+          EXPECTED="${TAG#v}"
+          ACTUAL="$(./mvnw -q -B help:evaluate -Dexpression=project.version -DforceStdout)"
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::pom.xml version is '$ACTUAL' but tag $TAG expects '$EXPECTED'."
+            echo "::error::Bump <version> in pom.xml to $EXPECTED and merge that to main BEFORE tagging - see the comment at the top of release.yml."
+            exit 1
+          fi
 
       - name: Build full jar (includes web UI)
         run: ./mvnw -B clean package -DskipTests
@@ -63,47 +63,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: ${{ steps.jar.outputs.path }}
           generate_release_notes: true
-
-      - name: Sync pom.xml version back to the default branch
-        continue-on-error: true # a hiccup here shouldn't mark an already-published release as failed
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
-          SYNC_BRANCH="bot/sync-version-$VERSION"
-
-          git fetch origin "$DEFAULT_BRANCH"
-          git checkout -B "$SYNC_BRANCH" "origin/$DEFAULT_BRANCH"
-
-          # Reapply on top of the default branch's current tip, in case it
-          # has moved on since the tag was cut.
-          ./mvnw -q -B versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
-
-          if git diff --quiet -- pom.xml; then
-            echo "pom.xml on $DEFAULT_BRANCH is already at $VERSION, nothing to sync"
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore: sync pom.xml version to $VERSION" -- pom.xml
-
-          # Push to a dedicated branch and open a PR rather than pushing
-          # straight to the default branch - it's commonly protected
-          # (required reviews/checks), which a direct push would fail against.
-          git push --force origin "$SYNC_BRANCH:$SYNC_BRANCH"
-
-          if [ "$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq 'length')" = "0" ]; then
-            gh pr create \
-              --base "$DEFAULT_BRANCH" \
-              --head "$SYNC_BRANCH" \
-              --title "chore: sync pom.xml version to $VERSION" \
-              --body "Automated follow-up to the $VERSION release: keeps pom.xml in sync with what was actually published. Safe to merge."
-          else
-            echo "PR for $SYNC_BRANCH already open, branch updated above"
-          fi

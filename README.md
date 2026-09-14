@@ -76,6 +76,13 @@ The jar (`target/ClusterComparator-<version>-full.jar`) includes everything, inc
 
 Only drop `-DskipUi` if you're actively developing the web UI and need to regenerate it from source — that path downloads Node.js and npm packages from the internet and is commonly blocked by corporate firewalls. See [Building the Web Interface](docs/web-ui.md#building) for details.
 
+### Cutting a Release (Maintainers)
+
+1. Bump `<version>` in `pom.xml` to the release version (e.g. `1.3.0`), commit/PR, and merge to `main`.
+2. Tag that exact commit and push the tag: `git tag v1.3.0 && git push origin v1.3.0`.
+
+Pushing the tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds the full jar and attaches it to a GitHub Release. The workflow verifies `pom.xml`'s version matches the tag and fails with a clear error if you tag before bumping it — the version bump has to land on `main` first so the tag and the released jar always match what you'd get rebuilding that same tag yourself.
+
 ## 🔄 Basic Workflow
 
 1. **Choose your comparison mode** based on your needs:
