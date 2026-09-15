@@ -15,12 +15,25 @@
 		<javalin.version>6.7.0</javalin.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+		<!--
+		  Default build: an 8-baseline jar. Bytecode compiled targeting release 8 runs
+		  unmodified on JDK 8, 11, 21 and newer, and aerospike-client-jdk8 is itself
+		  compiled to Java 8 bytecode - this is the variant almost everyone should use.
+		  The "jdk21" profile below overrides both properties to build a second,
+		  separate jar for people specifically on JDK 21+ who want Aerospike's
+		  newer-JVM-optimized client (aerospike-client-jdk21, which requires a 21+
+		  JRE and will NOT load on 8 or 11 - see the jdk21 profile).
+		-->
+		<aerospike-client.artifactId>aerospike-client-jdk8</aerospike-client.artifactId>
+		<maven.compiler.release>8</maven.compiler.release>
+		<jar.variant>jdk8</jar.variant>
 	</properties>
 
   <dependencies>
       <dependency>
         <groupId>com.aerospike</groupId>
-        <artifactId>aerospike-client-jdk8</artifactId>
+        <artifactId>${aerospike-client.artifactId}</artifactId>
         <version>${aerospike-client.verion}</version>
       </dependency>
 		<!-- Commons CLI needed for command line parsing on utilities -->
@@ -78,8 +91,14 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.15.0</version>
 				<configuration>
-					<source>11</source>
-					<target>11</target>
+					<!--
+					  <release> (not <source>/<target>) so the compiler validates against that
+					  JDK's actual API surface even when Maven itself runs on a newer JDK -
+					  <source>/<target> alone only checks language syntax, which previously let
+					  Java 9+ APIs (Map.of, List.of, String#isBlank) slip into the code
+					  unnoticed because CI happened to build with JDK 21.
+					-->
+					<release>${maven.compiler.release}</release>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -96,7 +115,7 @@
 							<addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
 						</manifest>
 					</archive>
-					<finalName>${project.artifactId}-${project.version}-full</finalName>
+					<finalName>${project.artifactId}-${project.version}-${jar.variant}-full</finalName>
 					<appendAssemblyId>false</appendAssemblyId>
 				</configuration>
 				<executions>
@@ -171,6 +190,21 @@
 					</plugin>
 				</plugins>
 			</build>
+		</profile>
+
+		<!--
+		  Builds the alternate jar for people specifically on JDK 21+ who want
+		  Aerospike's newer-JVM-optimized client. Requires JDK 21+ to run Maven itself
+		  (javac can't target a release higher than its own JDK). Activate with the
+		  jdk21 Maven profile.
+		-->
+		<profile>
+			<id>jdk21</id>
+			<properties>
+				<aerospike-client.artifactId>aerospike-client-jdk21</aerospike-client.artifactId>
+				<maven.compiler.release>21</maven.compiler.release>
+				<jar.variant>jdk21</jar.variant>
+			</properties>
 		</profile>
 	</profiles>
 

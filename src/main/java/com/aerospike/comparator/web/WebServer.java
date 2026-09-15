@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -34,6 +35,18 @@ import io.javalin.http.staticfiles.Location;
 import io.javalin.util.JavalinLogger;
 
 public class WebServer {
+    /**
+     * Java-8-compatible stand-in for {@code Map.of(...)} (Java 9+), used to build the small
+     * JSON response bodies below. Keys and values alternate, e.g. mapOf("error", message).
+     */
+    private static Map<String, Object> mapOf(Object... keysAndValues) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        for (int i = 0; i < keysAndValues.length; i += 2) {
+            map.put((String) keysAndValues[i], keysAndValues[i + 1]);
+        }
+        return map;
+    }
+
     private final ClusterComparatorOptions initialOptions;
     private final ComparisonSession session = new ComparisonSession();
     private final Map<String, Object> currentOptions;
@@ -124,20 +137,20 @@ public class WebServer {
                 }
                 String authHeader = ctx.header("Authorization");
                 if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                    ctx.status(401).json(Map.of("error", "Authentication required"));
+                    ctx.status(401).json(mapOf("error", "Authentication required"));
                     ctx.skipRemainingHandlers();
                     return;
                 }
                 String token = authHeader.substring(7);
                 if (!validTokens.containsKey(token)) {
-                    ctx.status(401).json(Map.of("error", "Invalid token"));
+                    ctx.status(401).json(mapOf("error", "Invalid token"));
                     ctx.skipRemainingHandlers();
                 }
             });
         }
 
         app.get("/api/auth-required", ctx -> {
-            ctx.json(Map.of("required", initialOptions.getWebPassword() != null));
+            ctx.json(mapOf("required", initialOptions.getWebPassword() != null));
         });
 
         app.get("/api/jvm-tls-params", ctx -> {
@@ -148,13 +161,13 @@ public class WebServer {
                 body.put("ciphers", Arrays.asList(params.getCipherSuites()));
                 ctx.json(body);
             } catch (Exception e) {
-                ctx.status(500).json(Map.of("error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
+                ctx.status(500).json(mapOf("error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
             }
         });
 
         app.post("/api/auth", ctx -> {
             if (initialOptions.getWebPassword() == null) {
-                ctx.json(Map.of("token", "none"));
+                ctx.json(mapOf("token", "none"));
                 return;
             }
             Map<?, ?> body = ctx.bodyAsClass(Map.class);
@@ -162,9 +175,9 @@ public class WebServer {
             if (initialOptions.getWebPassword().equals(password)) {
                 String token = UUID.randomUUID().toString();
                 validTokens.put(token, true);
-                ctx.json(Map.of("token", token));
+                ctx.json(mapOf("token", token));
             } else {
-                ctx.status(401).json(Map.of("error", "Invalid password"));
+                ctx.status(401).json(mapOf("error", "Invalid password"));
             }
         });
 
@@ -177,7 +190,7 @@ public class WebServer {
             Map<String, Object> newOptions = ctx.bodyAsClass(Map.class);
             currentOptions.clear();
             currentOptions.putAll(newOptions);
-            ctx.json(Map.of("status", "ok"));
+            ctx.json(mapOf("status", "ok"));
         });
 
         app.post("/api/start", ctx -> {
@@ -194,25 +207,25 @@ public class WebServer {
                     return;
                 }
             } catch (Exception e) {
-                ctx.status(400).json(Map.of("error", "Invalid options: " + e.getMessage()));
+                ctx.status(400).json(mapOf("error", "Invalid options: " + e.getMessage()));
                 return;
             }
             String error = session.start(argsArray);
             if (error != null) {
-                ctx.status(400).json(Map.of("error", error));
+                ctx.status(400).json(mapOf("error", error));
             } else {
-                ctx.json(Map.of("status", "started"));
+                ctx.json(mapOf("status", "started"));
             }
         });
 
         app.post("/api/stop", ctx -> {
             session.stop();
-            ctx.json(Map.of("status", "stopped"));
+            ctx.json(mapOf("status", "stopped"));
         });
 
         app.post("/api/reset", ctx -> {
             session.reset();
-            ctx.json(Map.of("status", "reset"));
+            ctx.json(mapOf("status", "reset"));
         });
 
         app.get("/api/results-history", ctx -> {
@@ -222,7 +235,7 @@ public class WebServer {
         app.delete("/api/results-history/{index}", ctx -> {
             int index = Integer.parseInt(ctx.pathParam("index"));
             session.removeCompletedRun(index);
-            ctx.json(Map.of("status", "deleted"));
+            ctx.json(mapOf("status", "deleted"));
         });
 
         app.get("/api/status", ctx -> {
@@ -245,7 +258,7 @@ public class WebServer {
                 Map<String, Object> result = testConnection(body);
                 ctx.json(result);
             } catch (Exception e) {
-                ctx.status(400).json(Map.of("success", false, "error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
+                ctx.status(400).json(mapOf("success", false, "error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
             }
         });
 
@@ -258,13 +271,13 @@ public class WebServer {
                 Map<String, Object> result = fetchClusterMetadata(clusterList);
                 ctx.json(result);
             } catch (Exception e) {
-                ctx.status(400).json(Map.of("error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
+                ctx.status(400).json(mapOf("error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
             }
         });
 
         app.post("/api/populate-cancel", ctx -> {
             populateCancelRequested.set(true);
-            ctx.json(Map.of("status", "cancelRequested"));
+            ctx.json(mapOf("status", "cancelRequested"));
         });
 
         app.post("/api/populate-data", ctx -> {
@@ -277,7 +290,7 @@ public class WebServer {
                 Map<String, Object> result = populateData(body);
                 ctx.json(result);
             } catch (Exception e) {
-                ctx.status(400).json(Map.of("success", false, "error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
+                ctx.status(400).json(mapOf("success", false, "error", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
             } finally {
                 populateCurrent.set(0);
                 populateTotal.set(0);
@@ -286,7 +299,7 @@ public class WebServer {
         });
 
         app.get("/api/populate-progress", ctx -> {
-            ctx.json(Map.of("current", populateCurrent.get(), "total", populateTotal.get()));
+            ctx.json(mapOf("current", populateCurrent.get(), "total", populateTotal.get()));
         });
 
         app.sse("/api/progress", client -> {

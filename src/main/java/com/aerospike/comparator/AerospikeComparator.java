@@ -1,7 +1,6 @@
 package com.aerospike.comparator;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -65,6 +64,21 @@ public class AerospikeComparator implements Comparator<Object> {
         }
     }
     
+    /**
+     * Java-8-compatible stand-in for {@code Arrays.compare(byte[], byte[])} (Java 9+):
+     * lexicographic comparison using the natural (signed) ordering of each byte.
+     */
+    private static int compareBytes(byte[] a, byte[] b) {
+        int len = Math.min(a.length, b.length);
+        for (int i = 0; i < len; i++) {
+            int cmp = Byte.compare(a[i], b[i]);
+            if (cmp != 0) {
+                return cmp;
+            }
+        }
+        return a.length - b.length;
+    }
+
     private int compareList(List<Object> l1, List<Object> l2) {
         int l1Size = l1.size();
         int l2Size = l2.size();
@@ -135,7 +149,7 @@ public class AerospikeComparator implements Comparator<Object> {
         case MAP:
             return compareMap((Map<Object, Object>)o1, (Map<Object, Object>)o2);
         case BYTES:
-            return Arrays.compare((byte [])o1, (byte [])o2);
+            return compareBytes((byte [])o1, (byte [])o2);
         case DOUBLE:
             return Double.compare(((Number)o1).doubleValue(), ((Number)o2).doubleValue());
         case OTHER:

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -101,8 +102,8 @@ public class PathOptionsLongTest extends AbstractBaseTest {
         truncateTwoTestClusters();
 
         Key key = uniqueKey("unordered");
-        putRecord(TWO_CLUSTER_A, key, new Bin("name", "Tim"), new Bin("age", 312), new Bin("unordered", List.of(1, 2, 3, 4, 5)));
-        putRecord(TWO_CLUSTER_B, key, new Bin("name", "Tim"), new Bin("age", 312), new Bin("unordered", List.of(5, 1, 2, 3, 4)));
+        putRecord(TWO_CLUSTER_A, key, new Bin("name", "Tim"), new Bin("age", 312), new Bin("unordered", Arrays.asList(1, 2, 3, 4, 5)));
+        putRecord(TWO_CLUSTER_B, key, new Bin("name", "Tim"), new Bin("age", 312), new Bin("unordered", Arrays.asList(5, 1, 2, 3, 4)));
 
         assertTrue(runComparator(twoClusterScanArgs("RECORD_DIFFERENCES", null)).areDifferent());
 

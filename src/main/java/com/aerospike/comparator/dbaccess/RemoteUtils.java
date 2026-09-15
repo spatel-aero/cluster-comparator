@@ -70,12 +70,14 @@ public class RemoteUtils {
         String namespace = dis.readUTF();
         String setName = dis.readUTF();
         int length = dis.readInt();
-        byte[] bytes = dis.readNBytes(length);
+        byte[] bytes = new byte[length];
+        dis.readFully(bytes);
         int type = dis.readInt();
         Value value = null;
         if (type == ParticleType.BLOB) {
             length = dis.readInt();
-            byte[] keyBytes = dis.readNBytes(length);
+            byte[] keyBytes = new byte[length];
+            dis.readFully(keyBytes);
             value = Value.get(keyBytes);
         }
         else if (type == ParticleType.DOUBLE) {
@@ -148,7 +150,8 @@ public class RemoteUtils {
     public static Bin readBin(DataInputStream dis) throws IOException {
         String name = dis.readUTF();
         int length = dis.readInt();
-        byte[] bytes = dis.readNBytes(length);
+        byte[] bytes = new byte[length];
+        dis.readFully(bytes);
         try (ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
                 ObjectInputStream ois = new ObjectInputStream(bis)) {
             Object value = ois.readObject();
@@ -185,7 +188,8 @@ public class RemoteUtils {
             int expiration = dis.readInt();
             int generation = dis.readInt();
             int length = dis.readInt();
-            byte[] bytes = dis.readNBytes(length);
+            byte[] bytes = new byte[length];
+            dis.readFully(bytes);
             try (ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
                     ObjectInputStream ois = new ObjectInputStream(bis)) {
                 Map<String, Object> map = (Map<String, Object>) ois.readObject();
@@ -221,7 +225,8 @@ public class RemoteUtils {
         boolean exists = dis.readBoolean();
         if (exists) {
             int length = dis.readInt();
-            byte[] bytes = dis.readNBytes(length);
+            byte[] bytes = new byte[length];
+            dis.readFully(bytes);
             try (ByteArrayInputStream bis = new ByteArrayInputStream(bytes);
                     ObjectInputStream ois = new ObjectInputStream(bis)) {
                 RecordMetadata result = (RecordMetadata) ois.readObject();
@@ -256,7 +261,8 @@ public class RemoteUtils {
             /*int expiration = */ dis.readInt();
             /*int generation = */ dis.readInt();
             int length = dis.readInt();
-            byte[] bytes = dis.readNBytes(length);
+            byte[] bytes = new byte[length];
+            dis.readFully(bytes);
             return bytes;
         }
         else {

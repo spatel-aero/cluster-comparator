@@ -211,7 +211,8 @@ public class RemoteServer {
                 qp.filterExp = null;
             }
             else {
-                byte[] bytes = dis.readNBytes(length);
+                byte[] bytes = new byte[length];
+                dis.readFully(bytes);
                 qp.filterExp = Expression.fromBytes(bytes);
             }
             

@@ -35,10 +35,10 @@ public final class ClusterTestHosts {
         String propertyKey = "aerospike.test.cluster." + (clusterIndex + 1);
         String envKey = "AEROSPIKE_TEST_CLUSTER_" + (clusterIndex + 1);
         String value = System.getProperty(propertyKey);
-        if (value == null || value.isBlank()) {
+        if (value == null || value.trim().isEmpty()) {
             value = System.getenv(envKey);
         }
-        if (value == null || value.isBlank()) {
+        if (value == null || value.trim().isEmpty()) {
             return DEFAULT_HOSTS[clusterIndex];
         }
         return value.trim();
