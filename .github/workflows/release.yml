@@ -1,10 +1,18 @@
 name: Release
 
-# Publishes a ready-to-run jar (web UI included, no build required) as a
-# GitHub Release asset whenever a version tag is pushed. This exists so
+# Publishes two ready-to-run jars (web UI included, no build required) as
+# GitHub Release assets whenever a version tag is pushed. This exists so
 # people who can't build the project themselves (e.g. behind a corporate
 # firewall that blocks the Node.js/npm download used to rebuild the UI)
 # can just download a working jar.
+#
+# Two variants are published, since Aerospike itself only publishes two
+# client tiers:
+#   - ClusterComparator-X.Y.Z-jdk11-full.jar: the default build. Runs on
+#     JDK 11 and newer (aerospike-client-jdk8, forward-compatible bytecode).
+#   - ClusterComparator-X.Y.Z-jdk21-full.jar: for people specifically on
+#     JDK 21+ who want Aerospike's newer-JVM-optimized client
+#     (aerospike-client-jdk21) - requires a 21+ JRE, will not load on older.
 #
 # Cutting a release:
 #   1. Bump <version> in pom.xml to the release version, commit/PR, merge to main.
@@ -53,16 +61,21 @@ jobs:
             exit 1
           fi
 
-      - name: Build full jar (includes web UI)
-        run: ./mvnw -B clean package -DskipTests
+      - name: Build jdk11 variant (default, includes web UI)
+        run: |
+          ./mvnw -B clean package -DskipTests
+          mkdir -p dist
+          cp target/ClusterComparator-*-full.jar dist/
 
-      - name: Determine jar path
-        id: jar
-        run: echo "path=$(ls target/ClusterComparator-*-full.jar)" >> "$GITHUB_OUTPUT"
+      - name: Build jdk21 variant (includes web UI)
+        # `clean` wipes target/ - the jdk11 jar was already copied to dist/ above.
+        run: |
+          ./mvnw -B clean package -DskipTests -Pjdk21
+          cp target/ClusterComparator-*-full.jar dist/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          files: ${{ steps.jar.outputs.path }}
+          files: dist/*.jar
           generate_release_notes: true
